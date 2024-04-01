@@ -1,5 +1,9 @@
 # ![image](https://github.com/Sqrl34/sqrl-nightclubs/assets/68661127/3cfc002a-66bb-4b22-b452-e6e608b9ad9b)
 sqrl-nightclubs
+
+FORKED FROM https://github.com/Sqrl34/sqrl-nightclubs?tab=readme-ov-file
+Changes done = nil
+
 A script for fivem using the QBCore framework that implements player owned nightclubs
 
 ## INSTALL
