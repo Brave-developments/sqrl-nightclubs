@@ -162,20 +162,46 @@ RegisterNetEvent('nightclubs:server:employeesFunction', function(type, hire)
     })
     TriggerClientEvent('nightclubs:client:update', src)
 end)
--- need to do
-RegisterNetEvent('nightclubs:server:handouts', function(ClubData, Employee, percentage)
+-- Everything is recomputed from the database, nothing is trusted from the client.
+-- The client still sends percentage for backwards compat, but it is ignored.
+RegisterNetEvent('nightclubs:server:handouts', function(ignoredClientData, ignoredEmployees, ignoredPercentage)
     local src = source
     local Player = QBCore.Functions.GetPlayer(src)
-    local total = 0.0
-    if percentage > 1 then
+    if not Player then return end
+
+    local data = getData(Player.PlayerData.citizenid)
+    if not data then
+        TriggerClientEvent('QBCore:Notify', src, 'You do not own a nightclub', 'error')
         return
     end
+
+    local ClubData = json.decode(data.metadata) or {}
+    local Employee = json.decode(data.employee) or {}
+
+    local total = 0.0
+    local foodState = MySQL.prepare.await('SELECT `missions` FROM `nightclubs` WHERE `citizenid` = ?',
+        { Player.PlayerData.citizenid })
+    local missions = foodState and json.decode(foodState) or {}
+
+    -- popularity: employees (client's pedPercentage was derived from these too)
+    local percentage = 0.0
+    if tonumber(Employee['dj']) ~= nil and tonumber(Employee['dj']) ~= 0 then
+        percentage = percentage + (tonumber(Employee['dancers']) or 0) * Config.PedPercentage.employee.dancers
+        percentage = percentage + (tonumber(Employee['tenders']) or 0) * Config.PedPercentage.employee.tenders
+        percentage = percentage + ((tonumber(missions['posters']) or 0)) * Config.PedPercentage.postermission
+        if ((tonumber(missions['food']) or 0)) < Config.FoodMission.min then
+            percentage = percentage + Config.PedPercentage.food
+        end
+    end
+
     total = total + percentage * #Config.PedSpawns.locations * Config.Earnings.admission
     total = total + Config.FoodMission.remove * Config.Earnings.food
-    total = total - Config.Employee.dj.price * Config.Employee.dj.hoursworked * tonumber(Employee['dj'])
-    total = total - Config.Employee.dancers.price * Config.Employee.dancers.hoursworked * tonumber(Employee['dancers'])
-    total = total - Config.Employee.tenders.price * Config.Employee.tenders.hoursworked * tonumber(Employee['tenders'])
-    for k,v in pairs(Config.Earnings.upgrades) do
+    total = total - Config.Employee.dj.price * Config.Employee.dj.hoursworked * (tonumber(Employee['dj']) or 0)
+    total = total - Config.Employee.dancers.price * Config.Employee.dancers.hoursworked * (tonumber(Employee['dancers']) or 0)
+    total = total - Config.Employee.tenders.price * Config.Employee.tenders.hoursworked * (tonumber(Employee['tenders']) or 0)
+
+    -- upgrade bonuses from the club's own metadata
+    for k, v in pairs(Config.Earnings.upgrades) do
         if Config.Earnings.upgrades[k].bonus then
             for m, v in pairs(Config.Earnings.upgrades[k].types) do
                 if Config.Earnings.upgrades[k].types[m].name == ClubData[Config.Earnings.upgrades[k].name] then
